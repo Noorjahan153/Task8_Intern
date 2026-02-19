@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: 'Docker image tag to deploy'
+        description: 'Docker image tag'
         required: false
         default: 'latest'
 
@@ -12,14 +12,12 @@ env:
   AWS_REGION: ap-south-1
   ECS_CLUSTER: strapi-cluster
   ECS_SERVICE: strapi-service
-  ECR_REPO: strapi
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -28,22 +26,19 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Deploy to ECS
+      - name: Deploy ECS
         run: |
           IMAGE_TAG="${{ github.event.inputs.image_tag }}"
           NEW_IMAGE="055013504553.dkr.ecr.ap-south-1.amazonaws.com/strapi:$IMAGE_TAG"
-          echo "Deploying ECS with image: $NEW_IMAGE"
+          echo "Deploying $NEW_IMAGE"
 
-          # Get current task definition family
           TASK_DEF_ARN=$(aws ecs describe-services \
             --cluster ${{ env.ECS_CLUSTER }} \
             --services ${{ env.ECS_SERVICE }} \
             --query 'services[0].taskDefinition' --output text)
-          
-          FAMILY=$(echo $TASK_DEF_ARN | cut -d'/' -f2 | cut -d':' -f1)
-          echo "Task Definition Family: $FAMILY"
 
-          # Download, update, register new task definition
+          FAMILY=$(echo $TASK_DEF_ARN | cut -d'/' -f2 | cut -d':' -f1)
+
           aws ecs describe-task-definition --task-definition $FAMILY --query taskDefinition > task-def.json
 
           cat task-def.json | jq --arg IMG "$NEW_IMAGE" \
@@ -51,7 +46,4 @@ jobs:
 
           NEW_ARN=$(aws ecs register-task-definition --cli-input-json file://new-task-def.json --query 'taskDefinition.taskDefinitionArn' --output text)
 
-          # Update ECS service
           aws ecs update-service --cluster ${{ env.ECS_CLUSTER }} --service ${{ env.ECS_SERVICE }} --task-definition $NEW_ARN --force-new-deployment
-
-          echo "✅ Deployment complete!"
