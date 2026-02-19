@@ -1,4 +1,4 @@
-name: CI - Build & Push Docker Image
+name: CI - Build & Push
 
 on:
   push:
@@ -6,14 +6,13 @@ on:
 
 env:
   AWS_REGION: ap-south-1
-  ECR_REPO: strapi
+  ECR_REPO: strapi-app
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -22,13 +21,11 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login to Amazon ECR
+      - name: Login to ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build and Push Docker image
+      - name: Build and Push Docker
         run: |
-          IMAGE_URI="055013504553.dkr.ecr.ap-south-1.amazonaws.com/strapi:latest"
-          echo "Building Docker image $IMAGE_URI"
+          IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPO }}:latest"
           docker build -t $IMAGE_URI ./my-strapi
-          echo "Pushing Docker image to ECR"
           docker push $IMAGE_URI
