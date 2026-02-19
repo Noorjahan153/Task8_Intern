@@ -1,4 +1,4 @@
-name: CI - Build & Push
+name: CI - Build & Push Docker Image
 
 on:
   push:
@@ -26,6 +26,6 @@ jobs:
 
       - name: Build and Push Docker image
         run: |
-          IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/strapi:latest"
+          IMAGE_URI="055013504553.dkr.ecr.ap-south-1.amazonaws.com/strapi:latest"
           docker build -t $IMAGE_URI ./strapi-app
           docker push $IMAGE_URI
