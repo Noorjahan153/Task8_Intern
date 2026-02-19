@@ -2,28 +2,54 @@ provider "aws" {
   region = "ap-south-1"
 }
 
-# 1️⃣ VPC
+# ------------------------------
+# VPC + Subnets + Internet Gateway
+# ------------------------------
 resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
-  enable_dns_support   = true
   enable_dns_hostnames = true
+  enable_dns_support   = true
   tags = { Name = "strapi-vpc" }
 }
 
-# 2️⃣ Public Subnet
 resource "aws_subnet" "public" {
+  count                   = 2
   vpc_id                  = aws_vpc.main.id
-  cidr_block              = "10.0.1.0/24"
+  cidr_block              = "10.0.${count.index + 1}.0/24"
   map_public_ip_on_launch = true
-  availability_zone       = "ap-south-1a"
+  availability_zone       = data.aws_availability_zones.available.names[count.index]
+  tags = { Name = "strapi-public-${count.index + 1}" }
 }
 
-# 3️⃣ Internet Gateway
-resource "aws_internet_gateway" "igw" {
+resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
+  tags   = { Name = "strapi-igw" }
 }
 
-# 4️⃣ Security Group for ECS
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
+  }
+
+  tags = { Name = "strapi-public-rt" }
+}
+
+resource "aws_route_table_association" "public" {
+  count          = 2
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public.id
+}
+
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+
+# ------------------------------
+# Security Groups
+# ------------------------------
 resource "aws_security_group" "ecs" {
   name_prefix = "strapi-ecs-"
   vpc_id      = aws_vpc.main.id
@@ -41,14 +67,28 @@ resource "aws_security_group" "ecs" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
+  tags = { Name = "strapi-ecs-sg" }
 }
 
-# 5️⃣ ECS Cluster
+# ------------------------------
+# CloudWatch Log Group
+# ------------------------------
+resource "aws_cloudwatch_log_group" "strapi" {
+  name              = "/ecs/strapi"
+  retention_in_days = 7
+}
+
+# ------------------------------
+# ECS Cluster
+# ------------------------------
 resource "aws_ecs_cluster" "strapi" {
   name = "strapi-cluster"
 }
 
-# 6️⃣ IAM Role for Fargate Task
+# ------------------------------
+# IAM Role for ECS Task Execution
+# ------------------------------
 resource "aws_iam_role" "execution" {
   name = "strapi-execution-role"
   assume_role_policy = jsonencode({
@@ -66,7 +106,18 @@ resource "aws_iam_role_policy_attachment" "execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# 7️⃣ ECS Task Definition
+# ------------------------------
+# ECR Repository
+# ------------------------------
+resource "aws_ecr_repository" "strapi" {
+  name                 = "strapi-app"
+  image_tag_mutability = "MUTABLE"
+  force_delete         = true
+}
+
+# ------------------------------
+# ECS Task Definition
+# ------------------------------
 resource "aws_ecs_task_definition" "strapi" {
   family                   = "strapi"
   network_mode             = "awsvpc"
@@ -77,13 +128,24 @@ resource "aws_ecs_task_definition" "strapi" {
 
   container_definitions = jsonencode([{
     name  = "strapi"
-    image = "055013504553.dkr.ecr.ap-south-1.amazonaws.com/strapi:latest"
+    image = "${aws_ecr_repository.strapi.repository_url}:latest"
     essential = true
     portMappings = [{ containerPort = 1337, protocol = "tcp" }]
+
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = aws_cloudwatch_log_group.strapi.name
+        "awslogs-region"        = "ap-south-1"
+        "awslogs-stream-prefix" = "ecs"
+      }
+    }
   }])
 }
 
-# 8️⃣ ECS Service
+# ------------------------------
+# ECS Service
+# ------------------------------
 resource "aws_ecs_service" "strapi" {
   name            = "strapi-service"
   cluster         = aws_ecs_cluster.strapi.id
@@ -92,8 +154,10 @@ resource "aws_ecs_service" "strapi" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets          = [aws_subnet.public.id]
+    subnets          = aws_subnet.public[*].id
     security_groups  = [aws_security_group.ecs.id]
     assign_public_ip = true
   }
+
+  depends_on = [aws_iam_role_policy_attachment.execution]
 }
