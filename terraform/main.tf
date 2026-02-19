@@ -187,3 +187,4 @@ resource "aws_ecs_service" "strapi" {
 
   depends_on = [aws_lb_listener.http]
 }
+
