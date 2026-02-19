@@ -155,3 +155,4 @@ resource "aws_ecs_service" "strapi" {
 
   depends_on = [aws_iam_role_policy_attachment.execution]
 }
+
