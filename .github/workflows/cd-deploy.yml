@@ -1,15 +1,59 @@
-- name: Login to Amazon ECR
-  uses: aws-actions/amazon-ecr-login@v2
+name: Deploy Strapi to ECS
 
-- name: Build Docker Image
-  run: docker build -t strapi ./my-strapi
+on:
+  push:
+    branches:
+      - main
 
-- name: Tag Docker Image
-  run: |
-    docker tag strapi:latest \
-    ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com/strapi:latest
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
 
-- name: Push Docker Image
-  run: |
-    docker push \
-    ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com/strapi:latest
+    steps:
+    # Checkout repository
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    # Configure AWS credentials
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ap-south-1
+
+    # Login to Amazon ECR
+    - name: Login to Amazon ECR
+      uses: aws-actions/amazon-ecr-login@v2
+
+    # Build Docker image from my-strapi folder
+    - name: Build Docker Image
+      run: docker build -t strapi ./my-strapi
+
+    # Tag Docker image
+    - name: Tag Docker Image
+      run: |
+        docker tag strapi:latest \
+        ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com/strapi:latest
+
+    # Push Docker image to ECR
+    - name: Push Docker Image
+      run: |
+        docker push \
+        ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com/strapi:latest
+
+    # Setup Terraform
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+
+    # Terraform Init
+    - name: Terraform Init
+      run: |
+        cd terraform
+        terraform init
+
+    # Terraform Apply
+    - name: Terraform Apply
+      run: |
+        cd terraform
+        terraform apply -auto-approve
