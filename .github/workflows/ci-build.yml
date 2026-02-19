@@ -12,7 +12,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -21,11 +22,13 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login to ECR
+      - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build and Push Docker image
         run: |
           IMAGE_URI="055013504553.dkr.ecr.ap-south-1.amazonaws.com/strapi:latest"
-          docker build -t $IMAGE_URI ./strapi-app
+          echo "Building Docker image $IMAGE_URI"
+          docker build -t $IMAGE_URI ./my-strapi
+          echo "Pushing Docker image to ECR"
           docker push $IMAGE_URI
