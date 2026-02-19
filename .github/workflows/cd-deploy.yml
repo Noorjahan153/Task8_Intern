@@ -1,37 +1,53 @@
-name: CD - Terraform Deploy
+name: Deploy Strapi to ECS
 
 on:
-  workflow_dispatch:
-
-env:
-  AWS_REGION: ap-south-1
+  push:
+    branches:
+      - main
 
 jobs:
-  terraform:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - name: Checkout
+      uses: actions/checkout@v3
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ap-south-1
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+    - name: Login to ECR
+      run: |
+        aws ecr get-login-password --region ap-south-1 | \
+        docker login --username AWS --password-stdin \
+        ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com
 
-      - name: Terraform Init
-        working-directory: ./terraform
-        run: terraform init
+    - name: Build Image
+      run: docker build -t strapi .
 
-      - name: Terraform Plan
-        working-directory: ./terraform
-        run: terraform plan
+    - name: Tag Image
+      run: |
+        docker tag strapi:latest \
+        ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com/strapi:latest
 
-      - name: Terraform Apply
-        working-directory: ./terraform
-        run: terraform apply -auto-approve
+    - name: Push Image
+      run: |
+        docker push \
+        ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com/strapi:latest
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+
+    - name: Terraform Init
+      run: |
+        cd terraform
+        terraform init
+
+    - name: Terraform Apply
+      run: |
+        cd terraform
+        terraform apply -auto-approve
