@@ -10,9 +10,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout
+    - name: Checkout Code
       uses: actions/checkout@v3
 
+    # Configure AWS credentials
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v2
       with:
@@ -20,34 +21,22 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ap-south-1
 
-    - name: Login to ECR
-      run: |
-        aws ecr get-login-password --region ap-south-1 | \
-        docker login --username AWS --password-stdin \
-        ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com
+    # Login to ECR (Official AWS action)
+    - name: Login to Amazon ECR
+      uses: aws-actions/amazon-ecr-login@v2
 
-    - name: Build Image
-      run: docker build -t strapi .
+    # Build Docker image from strapi folder
+    - name: Build Docker Image
+      run: docker build -t strapi ./strapi
 
-    - name: Tag Image
+    # Tag Docker image
+    - name: Tag Docker Image
       run: |
         docker tag strapi:latest \
         ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com/strapi:latest
 
-    - name: Push Image
+    # Push Docker image to ECR
+    - name: Push Docker Image
       run: |
         docker push \
-        ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com/strapi:latest
-
-    - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v2
-
-    - name: Terraform Init
-      run: |
-        cd terraform
-        terraform init
-
-    - name: Terraform Apply
-      run: |
-        cd terraform
-        terraform apply -auto-approve
+        ${{
