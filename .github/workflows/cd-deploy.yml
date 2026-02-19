@@ -17,7 +17,8 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -32,6 +33,7 @@ jobs:
           NEW_IMAGE="055013504553.dkr.ecr.ap-south-1.amazonaws.com/strapi:$IMAGE_TAG"
           echo "Deploying $NEW_IMAGE"
 
+          # Get current task definition
           TASK_DEF_ARN=$(aws ecs describe-services \
             --cluster ${{ env.ECS_CLUSTER }} \
             --services ${{ env.ECS_SERVICE }} \
@@ -41,9 +43,13 @@ jobs:
 
           aws ecs describe-task-definition --task-definition $FAMILY --query taskDefinition > task-def.json
 
+          # Update image in task definition
           cat task-def.json | jq --arg IMG "$NEW_IMAGE" \
             'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy) | .containerDefinitions[0].image = $IMG' > new-task-def.json
 
+          # Register new task definition
           NEW_ARN=$(aws ecs register-task-definition --cli-input-json file://new-task-def.json --query 'taskDefinition.taskDefinitionArn' --output text)
 
+          # Update ECS service to use new task
           aws ecs update-service --cluster ${{ env.ECS_CLUSTER }} --service ${{ env.ECS_SERVICE }} --task-definition $NEW_ARN --force-new-deployment
+          echo "✅ ECS Deployment Complete!"
