@@ -39,4 +39,20 @@ jobs:
     - name: Push Docker Image
       run: |
         docker push \
-        ${{
+        ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-south-1.amazonaws.com/strapi:latest
+
+    # Setup Terraform
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+
+    # Terraform Init
+    - name: Terraform Init
+      run: |
+        cd terraform
+        terraform init
+
+    # Terraform Apply
+    - name: Terraform Apply
+      run: |
+        cd terraform
+        terraform apply -auto-approve
