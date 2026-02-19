@@ -6,20 +6,26 @@ on:
 
 env:
   AWS_REGION: ap-south-1
-  ECR_REPO: strapi-app
+  ECR_REPO: strapi
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
-      - uses: aws-actions/amazon-ecr-login@v2
-      - run: |
-          IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPO }}:latest"
-          docker build -t $IMAGE_URI ./my-strapi
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and Push Docker image
+        run: |
+          IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/strapi:latest"
+          docker build -t $IMAGE_URI ./strapi-app
           docker push $IMAGE_URI
